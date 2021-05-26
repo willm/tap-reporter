@@ -78,24 +78,20 @@ impl TapParser {
                 }
                 if let Some(builder) = self.tests.last_mut() {
                     if line.starts_with("ok ") {
-                        if let Some(msg) = take_line_from_word(&line, 2) {
-                            builder.with_result(true, msg.to_string());
-                        }
+                        builder.with_result(true, take_line_from_word(&line, 2));
                     }
                     if line.starts_with("not ok ") {
-                        if let Some(msg) = take_line_from_word(&line, 3) {
-                            builder.with_result(false, msg.to_string());
-                        }
+                        builder.with_result(false, take_line_from_word(&line, 3));
                     }
                 }
             }
         }
     }
 }
-fn take_line_from_word(line: &str, word: usize) -> Option<String> {
+fn take_line_from_word(line: &str, word: usize) -> String {
     match line.split(" ").collect::<Vec<&str>>().get(word..) {
-        Some(msg) => Some(msg.join(" ")),
-        _ => None,
+        Some(msg) => msg.join(" "),
+        _ => String::from(""),
     }
 }
 
