@@ -77,25 +77,25 @@ impl TapParser {
                     }
                 }
                 if let Some(builder) = self.tests.last_mut() {
-                    let mut message: String = String::from("");
                     if line.starts_with("ok ") {
-                        let mut message: String = String::from("");
-                        match line.get(3..) {
-                            Some(msg) => message.push_str(msg),
-                            _ => {}
+                        if let Some(msg) = take_line_from_word(&line, 2) {
+                            builder.with_result(true, msg.to_string());
                         }
-                        builder.with_result(true, message);
                     }
                     if line.starts_with("not ok ") {
-                        match line.get(7..) {
-                            Some(msg) => message.push_str(msg),
-                            _ => {}
+                        if let Some(msg) = take_line_from_word(&line, 3) {
+                            builder.with_result(false, msg.to_string());
                         }
-                        builder.with_result(false, message);
                     }
                 }
             }
         }
+    }
+}
+fn take_line_from_word(line: &str, word: usize) -> Option<String> {
+    match line.split(" ").collect::<Vec<&str>>().get(word..) {
+        Some(msg) => Some(msg.join(" ")),
+        _ => None,
     }
 }
 
@@ -118,7 +118,7 @@ mod tests {
         assert_eq!(parser.tests.len(), 1);
         let test = parser.tests.last().unwrap().build();
         assert_eq!(test.name, "the happy path");
-        assert_eq!(test.assertion, "1 should be equal");
+        assert_eq!(test.assertion, "should be equal");
         assert_eq!(test.pass, true);
     }
 
@@ -131,7 +131,7 @@ mod tests {
         assert_eq!(parser.tests.len(), 1);
         let test = parser.tests.last().unwrap().build();
         assert_eq!(test.name, "the happy path");
-        assert_eq!(test.assertion, "2 should be equivalent");
+        assert_eq!(test.assertion, "should be equivalent");
         assert_eq!(test.pass, false);
     }
 
