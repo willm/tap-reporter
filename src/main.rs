@@ -4,7 +4,7 @@ use std::io::{self};
 fn main() -> io::Result<()> {
     let stdin = io::stdin();
     let mut lines = stdin.lock().lines();
-    let mut parser = TapParser::new(&lines.next());
+    let mut parser = TapParser::new(&lines.next(), DotFormatter {});
     for line in lines {
         parser.line(&Some(line));
     }
@@ -48,17 +48,21 @@ impl TestBuilder {
     }
 }
 
-struct TapParser {
+struct TapParser<T: TestFormat> {
     tests: Vec<TestBuilder>,
+    formatter: T,
 }
 
-impl TapParser {
-    fn new(input: &Option<io::Result<String>>) -> Self {
+impl<T: TestFormat> TapParser<T> {
+    fn new(input: &Option<io::Result<String>>, formatter: T) -> Self {
         let tap_header = "TAP version 13";
         if let Some(first_line) = input {
             if let Ok(line) = first_line {
                 if tap_header == line {
-                    return TapParser { tests: vec![] };
+                    return TapParser {
+                        tests: vec![],
+                        formatter,
+                    };
                 }
             }
         }
@@ -71,6 +75,7 @@ impl TapParser {
                 if line.starts_with("# ") {
                     if let Some(test_name) = line.get(2..) {
                         let mut builder = TestBuilder::new();
+                        self.formatter.new_test(test_name);
                         builder.with_name(test_name.clone());
 
                         self.tests.push(builder);
@@ -78,9 +83,13 @@ impl TapParser {
                 }
                 if let Some(builder) = self.tests.last_mut() {
                     if line.starts_with("ok ") {
-                        builder.with_result(true, take_line_from_word(&line, 2));
+                        let assertion = take_line_from_word(&line, 2);
+                        self.formatter.assertion(true, &assertion);
+                        builder.with_result(true, assertion);
                     }
                     if line.starts_with("not ok ") {
+                        let assertion = take_line_from_word(&line, 2);
+                        self.formatter.assertion(false, &assertion);
                         builder.with_result(false, take_line_from_word(&line, 3));
                     }
                 }
@@ -95,6 +104,29 @@ fn take_line_from_word(line: &str, word: usize) -> String {
     }
 }
 
+trait TestFormat {
+    fn new_test(&self, title: &str);
+    fn assertion(&self, passed: bool, assertion: &str);
+}
+
+struct DotFormatter;
+impl TestFormat for DotFormatter {
+    fn new_test(&self, _title: &str) {}
+    fn assertion(&self, passed: bool, _assertion: &str) {
+        if passed {
+            print!(".");
+        } else {
+            print!("x");
+        }
+    }
+}
+
+struct NullFormatter;
+impl TestFormat for NullFormatter {
+    fn new_test(&self, _title: &str) {}
+    fn assertion(&self, passed: bool, _assertion: &str) {}
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -102,12 +134,12 @@ mod tests {
 
     #[test]
     fn test_a_valid_header_line() {
-        TapParser::new(&Some(Ok(String::from(TAP_HEADER))));
+        TapParser::new(&Some(Ok(String::from(TAP_HEADER))), NullFormatter);
     }
 
     #[test]
     fn test_a_single_passing_test() {
-        let mut parser = TapParser::new(&Some(Ok(String::from(TAP_HEADER))));
+        let mut parser = TapParser::new(&Some(Ok(String::from(TAP_HEADER))), NullFormatter);
         parser.line(&Some(Ok(String::from("# the happy path"))));
         parser.line(&Some(Ok(String::from("ok 1 should be equal"))));
 
@@ -120,7 +152,7 @@ mod tests {
 
     #[test]
     fn test_a_single_failing_test() {
-        let mut parser = TapParser::new(&Some(Ok(String::from(TAP_HEADER))));
+        let mut parser = TapParser::new(&Some(Ok(String::from(TAP_HEADER))), NullFormatter);
         parser.line(&Some(Ok(String::from("# the happy path"))));
         parser.line(&Some(Ok(String::from("not ok 2 should be equivalent"))));
 
@@ -134,6 +166,6 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_an_invalid_header_line() {
-        TapParser::new(&mut Some(Ok(String::from("invalid"))));
+        TapParser::new(&mut Some(Ok(String::from("invalid"))), NullFormatter);
     }
 }
