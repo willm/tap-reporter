@@ -1,10 +1,12 @@
+use std::io;
 use std::io::prelude::*;
-use std::io::{self};
+
+use tap_reporter::formatters::*;
 
 fn main() -> io::Result<()> {
     let stdin = io::stdin();
     let mut lines = stdin.lock().lines();
-    let mut parser = TapParser::new(&lines.next(), DotFormatter {});
+    let mut parser = TapParser::new(&lines.next(), SpecFormatter {});
     for line in lines {
         parser.line(&Some(line));
     }
@@ -88,9 +90,9 @@ impl<T: TestFormat> TapParser<T> {
                         builder.with_result(true, assertion);
                     }
                     if line.starts_with("not ok ") {
-                        let assertion = take_line_from_word(&line, 2);
+                        let assertion = take_line_from_word(&line, 3);
                         self.formatter.assertion(false, &assertion);
-                        builder.with_result(false, take_line_from_word(&line, 3));
+                        builder.with_result(false, assertion);
                     }
                 }
             }
@@ -102,29 +104,6 @@ fn take_line_from_word(line: &str, word: usize) -> String {
         Some(msg) => msg.join(" "),
         _ => String::from(""),
     }
-}
-
-trait TestFormat {
-    fn new_test(&self, title: &str);
-    fn assertion(&self, passed: bool, assertion: &str);
-}
-
-struct DotFormatter;
-impl TestFormat for DotFormatter {
-    fn new_test(&self, _title: &str) {}
-    fn assertion(&self, passed: bool, _assertion: &str) {
-        if passed {
-            print!(".");
-        } else {
-            print!("x");
-        }
-    }
-}
-
-struct NullFormatter;
-impl TestFormat for NullFormatter {
-    fn new_test(&self, _title: &str) {}
-    fn assertion(&self, passed: bool, _assertion: &str) {}
 }
 
 #[cfg(test)]
