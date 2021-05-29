@@ -10,6 +10,7 @@ fn main() -> io::Result<()> {
     for line in lines {
         parser.line(&Some(line));
     }
+    parser.finalise();
     Ok(())
 }
 
@@ -50,8 +51,12 @@ impl TestBuilder {
     }
 }
 
-struct TapParser<T: TestFormat> {
+struct TapParser<T>
+where
+    T: TestFormat,
+{
     tests: Vec<TestBuilder>,
+    plan: Option<(i32, i32)>,
     formatter: T,
 }
 
@@ -64,6 +69,7 @@ impl<T: TestFormat> TapParser<T> {
                     return TapParser {
                         tests: vec![],
                         formatter,
+                        plan: None,
                     };
                 }
             }
@@ -82,23 +88,43 @@ impl<T: TestFormat> TapParser<T> {
 
                         self.tests.push(builder);
                     }
-                }
-                if let Some(builder) = self.tests.last_mut() {
+                } else if let Some(builder) = self.tests.last_mut() {
                     if line.starts_with("ok ") {
                         let assertion = take_line_from_word(&line, 2);
                         self.formatter.assertion(true, &assertion);
                         builder.with_result(true, assertion);
-                    }
-                    if line.starts_with("not ok ") {
+                    } else if line.starts_with("not ok ") {
                         let assertion = take_line_from_word(&line, 3);
                         self.formatter.assertion(false, &assertion);
                         builder.with_result(false, assertion);
+                    } else if let Some(plan) = parse_test_plan(line) {
+                        self.plan = Some(plan.clone());
+                    } else {
+                        self.formatter.log_output(line);
                     }
                 }
             }
         }
     }
+
+    fn finalise(&self) {
+        self.formatter.summerise(self.plan);
+    }
 }
+
+fn parse_test_plan(line: &str) -> Option<(i32, i32)> {
+    // converts 1..68 to (1,68)
+    let numbers = line
+        .split("..")
+        .map(|x| x.parse::<i32>())
+        .flatten()
+        .collect::<Vec<i32>>();
+    if numbers.len() != 2 {
+        return None;
+    }
+    Some((numbers[0], numbers[1]))
+}
+
 fn take_line_from_word(line: &str, word: usize) -> String {
     match line.split(" ").collect::<Vec<&str>>().get(word..) {
         Some(msg) => msg.join(" "),
@@ -140,6 +166,25 @@ mod tests {
         assert_eq!(test.name, "the happy path");
         assert_eq!(test.assertion, "should be equivalent");
         assert_eq!(test.pass, false);
+    }
+
+    #[test]
+    fn test_finalising_without_a_plan_line() {
+        let parser = TapParser::new(&Some(Ok(String::from(TAP_HEADER))), NullFormatter);
+        parser.finalise();
+
+        assert_eq!(parser.plan, None);
+    }
+
+    #[test]
+    fn test_finalising_with_a_plan_line() {
+        let mut parser = TapParser::new(&Some(Ok(String::from(TAP_HEADER))), NullFormatter);
+        parser.line(&Some(Ok(String::from("# the happy path"))));
+        parser.line(&Some(Ok(String::from("not ok 2 should be equivalent"))));
+        parser.line(&Some(Ok(String::from("1..1"))));
+        parser.finalise();
+
+        assert_eq!(parser.plan, Some((1, 1)));
     }
 
     #[test]
