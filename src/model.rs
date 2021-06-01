@@ -3,6 +3,7 @@ pub mod model {
         name: String,
         assertions: Vec<Assertion>,
         pass: bool,
+        log: Vec<String>,
     }
 
     impl Test {
@@ -16,6 +17,10 @@ pub mod model {
 
         pub fn pass(&self) -> bool {
             self.pass
+        }
+
+        pub fn log(&self) -> String {
+            self.log.join("\n")
         }
     }
 
@@ -44,6 +49,7 @@ pub mod model {
                     name: String::from(""),
                     assertions: vec![],
                     pass: true,
+                    log: vec![],
                 },
             }
         }
@@ -60,6 +66,10 @@ pub mod model {
             });
             self.test.pass = self.test.pass && pass;
             self
+        }
+
+        pub fn with_log(&mut self, log_line: &str) {
+            self.test.log.push(log_line.to_string());
         }
 
         pub fn build(&self) -> &Test {

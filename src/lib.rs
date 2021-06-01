@@ -25,7 +25,10 @@ mod text_decoration {
 
 pub mod formatters {
 
-    use crate::{model::model::Test, text_decoration::*};
+    use crate::{
+        model::model::{Assertion, Test},
+        text_decoration::*,
+    };
 
     pub struct DotFormatter;
     impl TestFormat for DotFormatter {
@@ -75,24 +78,42 @@ pub mod formatters {
     }
     impl TestFormat for SpecFormatter {
         fn new_test(&mut self, title: &str) {
-            // println!("\n{}\n", underlined(title));
             self.current_test = title.to_string();
         }
 
-        fn assertion(&self, passed: bool, assertion: &str) {
+        fn assertion(&self, passed: bool, _assertion: &str) {
             if passed {
-                print!("✅ ");
-            //println!("  ✅ {}", green(assertion));
+                print!("{}", green("."));
             } else {
-                println!("  ❌ {}", red(assertion));
+                print!("{}", red("x"));
             }
         }
-        fn log_output(&self, output: &str) {
-            print!("  {}\n", yellow(output));
-        }
+        fn log_output(&self, _output: &str) {}
         fn summerise(&self, plan: Option<(i32, i32)>, tests: Vec<&Test>) {
             if let Some(expected) = plan {
-                print!("Ran {} tests\n", expected.1);
+                let total_assertions = tests
+                    .iter()
+                    .flat_map(|&test| test.assertions())
+                    .collect::<Vec<&Assertion>>()
+                    .len();
+
+                let failed_tests = tests
+                    .into_iter()
+                    .filter(|&test| !test.pass())
+                    .collect::<Vec<&Test>>();
+
+                println!("\nRan {} of {} tests\n", expected.1, total_assertions);
+                for test in failed_tests {
+                    println!("\n{}\n", underlined(&test.name()));
+                    println!("{}", yellow(&test.log()));
+                    for assertion in test.assertions() {
+                        if assertion.pass() {
+                            println!("  ✅ {}", green(&assertion.message()));
+                        } else {
+                            println!("  ❌ {}", red(&assertion.message()));
+                        }
+                    }
+                }
             } else {
                 print!("Test suite ended without report");
             }

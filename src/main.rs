@@ -64,6 +64,7 @@ impl<T: TestFormat> TapParser<T> {
                     } else if let Some(plan) = parse_test_plan(line) {
                         self.plan = Some(plan.clone());
                     } else {
+                        builder.with_log(line);
                         self.formatter.log_output(line);
                     }
                 }
