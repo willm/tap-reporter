@@ -2,11 +2,12 @@ use std::io;
 use std::io::prelude::*;
 
 use tap_reporter::formatters::*;
+use tap_reporter::model::*;
 
 fn main() -> io::Result<()> {
     let stdin = io::stdin();
     let mut lines = stdin.lock().lines();
-    let mut parser = TapParser::new(&lines.next(), SpecFormatter {});
+    let mut parser = TapParser::new(&lines.next(), SpecFormatter::new());
     for line in lines {
         parser.line(&Some(line));
     }
@@ -14,57 +15,11 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-struct Test {
-    name: String,
-    assertions: Vec<Assertion>,
-    pass: bool,
-}
-
-#[derive(Clone)]
-struct Assertion {
-    message: String,
-    pass: bool,
-}
-
-struct TestBuilder {
-    test: Test,
-}
-
-impl TestBuilder {
-    fn new() -> Self {
-        TestBuilder {
-            test: Test {
-                name: String::from(""),
-                assertions: vec![],
-                pass: true,
-            },
-        }
-    }
-
-    fn with_name(&mut self, name: &str) -> &Self {
-        self.test.name = String::from(name);
-        self
-    }
-
-    fn with_assertion(&mut self, pass: bool, assertion: String) -> &Self {
-        self.test.assertions.push(Assertion {
-            pass,
-            message: assertion,
-        });
-        self.test.pass = self.test.pass && pass;
-        self
-    }
-
-    fn build(&self) -> &Test {
-        &self.test
-    }
-}
-
 struct TapParser<T>
 where
     T: TestFormat,
 {
-    tests: Vec<TestBuilder>,
+    tests: Vec<model::TestBuilder>,
     plan: Option<(i32, i32)>,
     formatter: T,
 }
@@ -91,7 +46,7 @@ impl<T: TestFormat> TapParser<T> {
             if let Ok(line) = first_line {
                 if line.starts_with("# ") {
                     if let Some(test_name) = line.get(2..) {
-                        let mut builder = TestBuilder::new();
+                        let mut builder = model::TestBuilder::new();
                         self.formatter.new_test(test_name);
                         builder.with_name(test_name.clone());
 
@@ -117,7 +72,13 @@ impl<T: TestFormat> TapParser<T> {
     }
 
     fn finalise(&self) {
-        self.formatter.summerise(self.plan);
+        self.formatter.summerise(
+            self.plan,
+            self.tests
+                .iter()
+                .map(|builder| builder.build())
+                .collect::<Vec<&model::Test>>(),
+        );
     }
 }
 
@@ -159,11 +120,11 @@ mod tests {
 
         assert_eq!(parser.tests.len(), 1);
         let test = parser.tests.last().unwrap().build();
-        assert_eq!(test.name, "the happy path");
-        let assertion = &test.assertions[0];
-        assert_eq!(assertion.message, "should be equal");
-        assert_eq!(assertion.pass, true);
-        assert_eq!(test.pass, true);
+        assert_eq!(test.name(), "the happy path");
+        let assertion = &test.assertions()[0];
+        assert_eq!(assertion.message(), "should be equal");
+        assert_eq!(assertion.pass(), true);
+        assert_eq!(test.pass(), true);
     }
 
     #[test]
@@ -175,18 +136,18 @@ mod tests {
 
         assert_eq!(parser.tests.len(), 1);
         let test = parser.tests.last().unwrap().build();
-        assert_eq!(test.name, "the happy path");
-        assert_eq!(test.assertions.len(), 2);
+        assert_eq!(test.name(), "the happy path");
+        assert_eq!(test.assertions().len(), 2);
 
-        let assertion = &test.assertions[0];
-        assert_eq!(assertion.message, "should be equal");
-        assert_eq!(assertion.pass, true);
+        let assertion = &test.assertions()[0];
+        assert_eq!(assertion.message(), "should be equal");
+        assert_eq!(assertion.pass(), true);
 
-        let assertion = &test.assertions[1];
-        assert_eq!(assertion.message, "should work");
-        assert_eq!(assertion.pass, false);
+        let assertion = &test.assertions()[1];
+        assert_eq!(assertion.message(), "should work");
+        assert_eq!(assertion.pass(), false);
 
-        assert_eq!(test.pass, false);
+        assert_eq!(test.pass(), false);
     }
 
     #[test]
@@ -197,11 +158,11 @@ mod tests {
 
         assert_eq!(parser.tests.len(), 1);
         let test = parser.tests.last().unwrap().build();
-        assert_eq!(test.name, "the happy path");
-        assert_eq!(test.name, "the happy path");
-        let assertion = &test.assertions[0];
-        assert_eq!(assertion.message, "should be equivalent");
-        assert_eq!(assertion.pass, false);
+        assert_eq!(test.name(), "the happy path");
+        assert_eq!(test.name(), "the happy path");
+        let assertion = &test.assertions()[0];
+        assert_eq!(assertion.message(), "should be equivalent");
+        assert_eq!(assertion.pass(), false);
     }
 
     #[test]
