@@ -36,7 +36,7 @@ impl TestBuilder {
             test: Test {
                 name: String::from(""),
                 assertions: vec![],
-                pass: false,
+                pass: true,
             },
         }
     }
@@ -51,6 +51,7 @@ impl TestBuilder {
             pass,
             message: assertion,
         });
+        self.test.pass = self.test.pass && pass;
         self
     }
 
@@ -162,6 +163,7 @@ mod tests {
         let assertion = &test.assertions[0];
         assert_eq!(assertion.message, "should be equal");
         assert_eq!(assertion.pass, true);
+        assert_eq!(test.pass, true);
     }
 
     #[test]
@@ -183,6 +185,8 @@ mod tests {
         let assertion = &test.assertions[1];
         assert_eq!(assertion.message, "should work");
         assert_eq!(assertion.pass, false);
+
+        assert_eq!(test.pass, false);
     }
 
     #[test]
