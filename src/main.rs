@@ -16,7 +16,13 @@ fn main() -> io::Result<()> {
 
 struct Test {
     name: String,
-    assertion: String,
+    assertions: Vec<Assertion>,
+    pass: bool,
+}
+
+#[derive(Clone)]
+struct Assertion {
+    message: String,
     pass: bool,
 }
 
@@ -29,7 +35,7 @@ impl TestBuilder {
         TestBuilder {
             test: Test {
                 name: String::from(""),
-                assertion: String::from(""),
+                assertions: vec![],
                 pass: false,
             },
         }
@@ -40,9 +46,11 @@ impl TestBuilder {
         self
     }
 
-    fn with_result(&mut self, pass: bool, assertion: String) -> &Self {
-        self.test.pass = pass;
-        self.test.assertion = assertion;
+    fn with_assertion(&mut self, pass: bool, assertion: String) -> &Self {
+        self.test.assertions.push(Assertion {
+            pass,
+            message: assertion,
+        });
         self
     }
 
@@ -92,11 +100,11 @@ impl<T: TestFormat> TapParser<T> {
                     if line.starts_with("ok ") {
                         let assertion = take_line_from_word(&line, 2);
                         self.formatter.assertion(true, &assertion);
-                        builder.with_result(true, assertion);
+                        builder.with_assertion(true, assertion);
                     } else if line.starts_with("not ok ") {
                         let assertion = take_line_from_word(&line, 3);
                         self.formatter.assertion(false, &assertion);
-                        builder.with_result(false, assertion);
+                        builder.with_assertion(false, assertion);
                     } else if let Some(plan) = parse_test_plan(line) {
                         self.plan = Some(plan.clone());
                     } else {
@@ -151,8 +159,30 @@ mod tests {
         assert_eq!(parser.tests.len(), 1);
         let test = parser.tests.last().unwrap().build();
         assert_eq!(test.name, "the happy path");
-        assert_eq!(test.assertion, "should be equal");
-        assert_eq!(test.pass, true);
+        let assertion = &test.assertions[0];
+        assert_eq!(assertion.message, "should be equal");
+        assert_eq!(assertion.pass, true);
+    }
+
+    #[test]
+    fn test_a_test_with_multiple_assertions() {
+        let mut parser = TapParser::new(&Some(Ok(String::from(TAP_HEADER))), NullFormatter);
+        parser.line(&Some(Ok(String::from("# the happy path"))));
+        parser.line(&Some(Ok(String::from("ok 1 should be equal"))));
+        parser.line(&Some(Ok(String::from("not ok 2 should work"))));
+
+        assert_eq!(parser.tests.len(), 1);
+        let test = parser.tests.last().unwrap().build();
+        assert_eq!(test.name, "the happy path");
+        assert_eq!(test.assertions.len(), 2);
+
+        let assertion = &test.assertions[0];
+        assert_eq!(assertion.message, "should be equal");
+        assert_eq!(assertion.pass, true);
+
+        let assertion = &test.assertions[1];
+        assert_eq!(assertion.message, "should work");
+        assert_eq!(assertion.pass, false);
     }
 
     #[test]
@@ -164,8 +194,10 @@ mod tests {
         assert_eq!(parser.tests.len(), 1);
         let test = parser.tests.last().unwrap().build();
         assert_eq!(test.name, "the happy path");
-        assert_eq!(test.assertion, "should be equivalent");
-        assert_eq!(test.pass, false);
+        assert_eq!(test.name, "the happy path");
+        let assertion = &test.assertions[0];
+        assert_eq!(assertion.message, "should be equivalent");
+        assert_eq!(assertion.pass, false);
     }
 
     #[test]
